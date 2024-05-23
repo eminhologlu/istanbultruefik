@@ -4,6 +4,8 @@ Bu proje, Leaflet ve Google Maps kullanarak rota planlama ve trafik yoğunluğu 
 Uygulama, başlangıç ve bitiş noktaları arasındaki ana rotayı çizdikten sonra benzin istasyonları, restoranlar, 
 hastaneler ve diğer yerler gibi ilgi noktalarına olan alternatif rotaları da göstermektedir.
 
+![Nokta Seçme Ekran Görüntüsü]([images/rota-haritasi.png](https://i.imgur.com/AMndnTS.png))
+
 ## Özellikler
 
 - Başlangıç ve bitiş noktaları arasındaki ana rotayı çizme.
