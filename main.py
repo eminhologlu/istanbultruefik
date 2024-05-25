@@ -32,33 +32,59 @@ def generate_map():
     # Checkboxes'tan gelen verileri al
     include_gas_stations = 'gas_station' in request.form
     include_restaurants = 'restaurant' in request.form
+    include_hastane = 'hastane' in request.form
+    user_input = request.form['user_input']
+
+    if user_input:
+        nearest_yer = find_nearest_yer(midpoint, user_input)
+        nearest_yer_point1 = find_nearest_yer(point1, user_input)
+        nearest_yer_point2 = find_nearest_yer(point2, user_input)
+
+        # Combine the results and remove duplicates
+        nearest_yer = nearest_yer + nearest_yer_point1 + nearest_yer_point2
+        # Remove duplicates by using a dictionary
+        unique_yer = {station['name']: station for station in nearest_yer}.values()
+        save_to_csv4(unique_yer)
+    else:
+        clear_csv('static/yerler.csv')
+
+    if include_hastane:
+        nearest_hastane = find_nearest_hastane(midpoint, keywords3)
+        save_to_csv3(nearest_hastane)
+    else:
+        clear_csv('static/hastane.csv')
 
     if include_restaurants:
-        # Find the nearest restaurants to the midpoint
         nearest_restaurants = find_nearest_restaurants(midpoint, keywords2)
-
-        # Save the gas stations to CSV
         save_to_csv2(nearest_restaurants)
     else:
         clear_csv('static/restoran.csv')
 
     if include_gas_stations:
-        # Find the nearest gas stations to the midpoint
-        nearest_gas_stations = find_nearest_gas_stations(midpoint,keywords)
+        # En yakın akaryakıt istasyonlarını bul: orta nokta, başlangıç ve bitiş
+        nearest_gas_stations_midpoint = find_nearest_gas_stations(midpoint, keywords)
+        nearest_gas_stations_point1 = find_nearest_gas_stations(point1, keywords)
+        nearest_gas_stations_point2 = find_nearest_gas_stations(point2, keywords)
 
-        # Save the gas stations to CSV
-        save_to_csv(nearest_gas_stations)
+        # Sonuçları birleştir
+        nearest_gas_stations = nearest_gas_stations_midpoint + nearest_gas_stations_point1 + nearest_gas_stations_point2
+        # Tekrarları sil
+        unique_gas_stations = {station['name']: station for station in nearest_gas_stations}.values()
+
+        # CSV'ye kaydet
+        save_to_csv(unique_gas_stations)
     else:
         clear_csv('static/gas_stations.csv')
 
     return render_template('map.html', point1=point1, point2=point2)
 
 
-keywords = ['akaryakıt istasyonu', 'benzinlik', 'benzin istasyonu', 'opet','shell','petrol ofisi','bp','petrol istasyonu']
-keywords2 = ['restoran', 'kebap', 'lokanta', 'döner']
+keywords = ['akaryakıt istasyonu', 'benzinlik', 'benzin istasyonu',
+            'opet', 'shell', 'petrol ofisi', 'bp', 'petrol istasyonu']
+keywords2 = ['restoran', 'kebap', 'lokanta', 'döner', 'lokantası', 'restoranı']
+keywords3 = ['hastane', 'hospital', 'araştırma hastanesi']
 
 def find_nearest_restaurants(midpoint, keywords, radius=5000):
-    # Google Places API endpoint for nearby search
     endpoint = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
     restaurants = []
 
@@ -66,7 +92,7 @@ def find_nearest_restaurants(midpoint, keywords, radius=5000):
         params = {
             'key': google_api_key,
             'location': f"{midpoint[0]},{midpoint[1]}",
-            'radius': radius,  # Search within the specified radius
+            'radius': radius,
             'keyword': keyword
         }
 
@@ -85,8 +111,8 @@ def find_nearest_restaurants(midpoint, keywords, radius=5000):
                 restaurants.append(place)
 
     return restaurants
-def find_nearest_gas_stations(midpoint, keywords, radius=5000):
-    # Google Places API endpoint for nearby search
+
+def find_nearest_gas_stations(midpoint, keywords, radius=2000):
     endpoint = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
     gas_stations = []
 
@@ -94,7 +120,32 @@ def find_nearest_gas_stations(midpoint, keywords, radius=5000):
         params = {
             'key': google_api_key,
             'location': f"{midpoint[0]},{midpoint[1]}",
-            'radius': radius,  # Search within the specified radius
+            'radius': radius,
+            'keyword': keyword
+        }
+        response = requests.get(endpoint, params=params)
+        data = response.json()
+        if 'results' in data:
+            for result in data['results']:
+                location = result['geometry']['location']
+                name = result['name']
+                place = {
+                    'name': name,
+                    'latitude': location['lat'],
+                    'longitude': location['lng']
+                }
+                gas_stations.append(place)
+    return gas_stations
+
+def find_nearest_hastane(midpoint, keywords, radius=5000):
+    endpoint = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+    hastaneler = []
+
+    for keyword in keywords:
+        params = {
+            'key': google_api_key,
+            'location': f"{midpoint[0]},{midpoint[1]}",
+            'radius': radius,
             'keyword': keyword
         }
 
@@ -110,14 +161,58 @@ def find_nearest_gas_stations(midpoint, keywords, radius=5000):
                     'latitude': location['lat'],
                     'longitude': location['lng']
                 }
-                gas_stations.append(place)
+                hastaneler.append(place)
 
-    return gas_stations
+    return hastaneler
+
+def find_nearest_yer(midpoint, keyword, radius=5000):
+    endpoint = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+    yerler = []
+    params = {
+        'key': google_api_key,
+        'location': f"{midpoint[0]},{midpoint[1]}",
+        'radius': radius,
+        'keyword': keyword
+    }
+
+    response = requests.get(endpoint, params=params)
+    data = response.json()
+
+    if 'results' in data:
+        for result in data['results']:
+            location = result['geometry']['location']
+            name = result['name']
+            place = {
+                'name': name,
+                'latitude': location['lat'],
+                'longitude': location['lng']
+            }
+            yerler.append(place)
+
+    return yerler
+
+def save_to_csv4(yerler):
+    csv_file = 'static/yerler.csv'
+    with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
+        headers = ['name', 'latitude', 'longitude']
+        writer = csv.DictWriter(file, fieldnames=headers)
+
+        writer.writeheader()
+        for station in yerler:
+            writer.writerow(station)
+
+def save_to_csv3(hastaneler):
+    csv_file = 'static/hastane.csv'
+    with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
+        headers = ['name', 'latitude', 'longitude']
+        writer = csv.DictWriter(file, fieldnames=headers)
+
+        writer.writeheader()
+        for station in hastaneler:
+            writer.writerow(station)
 
 def save_to_csv2(restaurants):
     csv_file = 'static/restoran.csv'
-    file_exists = os.path.isfile(csv_file)
-
     with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
         headers = ['name', 'latitude', 'longitude']
         writer = csv.DictWriter(file, fieldnames=headers)
@@ -125,14 +220,12 @@ def save_to_csv2(restaurants):
         writer.writeheader()
         for station in restaurants:
             writer.writerow(station)
+
 def save_to_csv(gas_stations):
     csv_file = 'static/gas_stations.csv'
-    file_exists = os.path.isfile(csv_file)
-
     with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
         headers = ['name', 'latitude', 'longitude']
         writer = csv.DictWriter(file, fieldnames=headers)
-
         writer.writeheader()
         for station in gas_stations:
             writer.writerow(station)
