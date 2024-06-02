@@ -1,4 +1,4 @@
-# Rota Haritası Projesi
+# İstanbul Truefik
 
 Bu proje, Leaflet ve Google Maps kullanarak rota planlama ve trafik yoğunluğu haritalarını gösteren bir web uygulamasıdır. 
 Uygulama, başlangıç ve bitiş noktaları arasındaki ana rotayı çizdikten sonra benzin istasyonları, restoranlar, 
@@ -26,7 +26,7 @@ hastaneler ve diğer yerler gibi ilgi noktalarına olan alternatif rotaları da 
 1. Bu projeyi yerel makinenize klonlayın:
     ```bash
     git clone https://github.com/eminhologlu/istanbultruefik.git
-    cd rota-haritasi-projesi
+    cd istanbultruefik
     ```
 
 2. Gerekli Python paketlerini yükleyin:
