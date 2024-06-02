@@ -150,6 +150,7 @@
 
         var point1 = {{ point1 | tojson }};
         var point2 = {{ point2 | tojson }};
+        var midPoint = [(point1[0] + point2[0]) / 2, (point1[1] + point2[1]) / 2];
 
         var mainRouteStyle = {
             color: 'blue',
@@ -177,6 +178,13 @@
 
         var hastaneIcon = L.icon({
             iconUrl: 'https://cdn.icon-icons.com/icons2/807/PNG/512/hospital-2_icon-icons.com_66067.png',  // Hastane ikonu
+            iconSize: [25, 41],  // İkonun boyutu
+            iconAnchor: [12, 41],  // İkonun haritadaki bağlantı noktası
+            popupAnchor: [1, -34]  // Açılır pencerenin bağlantı noktası
+        });
+
+        var isparkIcon = L.icon({
+            iconUrl: 'https://cdn.icon-icons.com/icons2/2093/PNG/512/parking_sign_signaling_automobile_parking_signs_car_icon_128576.png',  // Yer ikonu
             iconSize: [25, 41],  // İkonun boyutu
             iconAnchor: [12, 41],  // İkonun haritadaki bağlantı noktası
             popupAnchor: [1, -34]  // Açılır pencerenin bağlantı noktası
@@ -224,6 +232,87 @@
                 drawLinesToGasStations(results.data);
             }
         });
+
+        function findClosestPoints(points, center, n) {
+            return points.map(point => ({
+                point: point,
+                distance: getDistance(point, center)
+            }))
+                .sort((a, b) => a.distance - b.distance)
+                .slice(0, n)
+                .map(p => p.point);
+        }
+
+        function getDistance(point1, point2) {
+            var lat1 = point1[0];
+            var lon1 = point1[1];
+            var lat2 = point2[0];
+            var lon2 = point2[1];
+            var R = 6371; // Dünya'nın yarıçapı (km)
+            var dLat = (lat2 - lat1) * Math.PI / 180;
+            var dLon = (lon2 - lon1) * Math.PI / 180;
+            var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            var distance = R * c;
+            return distance;
+        }
+
+        var isparkMarkers = [];
+
+        Papa.parse("static/ispark.csv", {
+    download: true,
+    header: true,
+    complete: function (results) {
+        var isparkPoints = results.data.map(function (point) {
+            return [parseFloat(point.LATITUDE), parseFloat(point.LONGITUDE), point.name];
+        });
+
+        var closestIsparksStart = findClosestPoints(isparkPoints, point1, 10);
+        var closestIsparksEnd = findClosestPoints(isparkPoints, point2, 10);
+
+        closestIsparksStart.forEach(function (point) {
+            var marker = L.marker([point[0], point[1]], { icon: isparkIcon }).addTo(leafletMap);
+            marker.bindPopup(point[2]);
+            isparkMarkers.push(marker);
+
+            L.Routing.control({
+                waypoints: [
+                    L.latLng(point1),
+                    L.latLng(point[0], point[1]),
+                    L.latLng(midPoint),
+                    L.latLng(point2)
+                ],
+                lineOptions: {
+                    styles: [altRouteStyle]
+                },
+                createMarker: function () { return null; }
+            }).addTo(leafletMap);
+        });
+
+        closestIsparksEnd.forEach(function (point) {
+            var marker = L.marker([point[0], point[1]], { icon: isparkIcon }).addTo(leafletMap);
+            marker.bindPopup(point[2]);
+            isparkMarkers.push(marker);
+
+            L.Routing.control({
+                waypoints: [
+                    L.latLng(point1),
+                    L.latLng(midPoint),
+                    L.latLng(point2),
+                    L.latLng(point[0], point[1])
+                ],
+                lineOptions: {
+                    styles: [altRouteStyle]
+                },
+                createMarker: function () { return null; }
+            }).addTo(leafletMap);
+        });
+    }
+});
+
+
 
         Papa.parse("static/restoran.csv", {
             download: true,
@@ -286,7 +375,14 @@
                     console.error("Geçersiz koordinatlar:", yer);
                     return;
                 }
-                var marker = L.marker(coordinates, { icon: yerIcon }).addTo(leafletMap).bindPopup(yer.name);
+                var ratingHTML = generateStarRating(yer.rating);
+
+        var popupContent = `
+            <strong>${yer.name}</strong><br>
+            ${ratingHTML}
+        `;
+
+        var marker = L.marker(coordinates, { icon: yerIcon }).addTo(leafletMap).bindPopup(popupContent);
                 L.Routing.control({
                     waypoints: [
                         L.latLng(point1),
@@ -308,36 +404,71 @@
                 }).addTo(leafletMap);
             });
         }
+        function generateStarRating(rating) {
+    var fullStars = Math.floor(rating);
+    var halfStar = rating % 1 >= 0.5 ? 1 : 0;
+    var emptyStars = 5 - fullStars - halfStar;
+
+    var starsHTML = '';
+
+    for (var i = 0; i < fullStars; i++) {
+        starsHTML += '★';  // Full star
+    }
+
+    if (halfStar) {
+        starsHTML += '☆';  // Half star (you can customize this if you have a specific half-star icon)
+    }
+
+    for (var i = 0; i < emptyStars; i++) {
+        starsHTML += '☆';  // Empty star
+    }
+
+    return `
+        <div>
+            <div>${rating}</div>
+            <div>${starsHTML}</div>
+        </div>
+    `;
+}
 
         function drawLinesToRestoran(restoranlar) {
-            restoranlar.forEach(function (restoran) {
-                var coordinates = [parseFloat(restoran.latitude), parseFloat(restoran.longitude)];
-                if (isNaN(coordinates[0]) || isNaN(coordinates[1])) {
-                    console.error("Geçersiz koordinatlar:", restoran);
-                    return;
-                }
-                var marker = L.marker(coordinates, { icon: restoranIcon }).addTo(leafletMap).bindPopup(restoran.name);
-                L.Routing.control({
-                    waypoints: [
-                        L.latLng(point1),
-                        L.latLng(coordinates)
-                    ],
-                    lineOptions: {
-                        styles: [altRouteStyle]
-                    },
-                    routeWhileDragging: false,
-                    show: false,
-                    addWaypoints: false,
-                    createMarker: function () { return null; }
-                }).on('routesfound', function (e) {
-                    var routes = e.routes;
-                    var summary = routes[0].summary;
-                    console.log('Restoran rotası bulundu: ', summary);
-                }).on('routingerror', function (e) {
-                    console.error('Restoran rotası bulunamadı:', e.error);
-                }).addTo(leafletMap);
-            });
+    restoranlar.forEach(function (restoran) {
+        var coordinates = [parseFloat(restoran.latitude), parseFloat(restoran.longitude)];
+        if (isNaN(coordinates[0]) || isNaN(coordinates[1])) {
+            console.error("Geçersiz koordinatlar:", restoran);
+            return;
         }
+
+        var ratingHTML = generateStarRating(restoran.rating);
+
+        var popupContent = `
+            <strong>${restoran.name}</strong><br>
+            ${ratingHTML}
+        `;
+
+        var marker = L.marker(coordinates, { icon: restoranIcon }).addTo(leafletMap).bindPopup(popupContent);
+
+        L.Routing.control({
+            waypoints: [
+                L.latLng(point1),
+                L.latLng(coordinates)
+            ],
+            lineOptions: {
+                styles: [altRouteStyle]
+            },
+            routeWhileDragging: false,
+            show: false,
+            addWaypoints: false,
+            createMarker: function () { return null; }
+        }).on('routesfound', function (e) {
+            var routes = e.routes;
+            var summary = routes[0].summary;
+            console.log('Restoran rotası bulundu: ', summary);
+        }).on('routingerror', function (e) {
+            console.error('Restoran rotası bulunamadı:', e.error);
+        }).addTo(leafletMap);
+    });
+}
 
         function drawLinesToGasStations(gasStations) {
             gasStations.forEach(function (gasStation) {
@@ -392,7 +523,7 @@
                 }
 
                 googleMapScript = document.createElement('script');
-                googleMapScript.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyACNNqf1GszcxCJH9XQJLyvDkQ5Khs8dHA&callback=initGoogleMap&libraries=places';
+                googleMapScript.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyBqL-YqdqWSb4lFv4EEzfIR1HSPwqxoFec&callback=initGoogleMap&libraries=places';
                 document.body.appendChild(googleMapScript);
             }
         }

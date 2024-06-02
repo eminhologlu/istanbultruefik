@@ -6,7 +6,7 @@ import os
 app = Flask(__name__)
 
 # Replace with your Google API key
-google_api_key = 'AIzaSyACNNqf1GszcxCJH9XQJLyvDkQ5Khs8dHA'
+google_api_key = 'AIzaSyBqL-YqdqWSb4lFv4EEzfIR1HSPwqxoFec'
 
 @app.route('/')
 def index():
@@ -16,7 +16,26 @@ def index():
 def clear_csv(csv_file):
     # Clear the existing file
     with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
-        headers = ['name', 'latitude', 'longitude']
+        headers = ['name', 'latitude', 'longitude', 'rating']
+        writer = csv.DictWriter(file, fieldnames=headers)
+        writer.writeheader()
+
+def csv_kopyala(kaynak, hedef):
+    # Kaynak dosyayı oku
+    with open(kaynak, 'r', newline='') as file:
+        csv_reader = csv.reader(file)
+        veriler = list(csv_reader)  # CSV verilerini oku ve listeye dönüştür
+
+    # Hedef dosyaya yaz
+    with open(hedef, 'w', newline='') as file:
+        csv_writer = csv.writer(file)
+        csv_writer.writerows(veriler)  # CSV verilerini hedef dosyaya yaz
+
+    print(f'{kaynak} dosyası {hedef} dosyasına başarıyla kopyalandı.')
+def clear_csv_ispark(csv_file):
+    # Clear the existing file
+    with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
+        headers = ['name', 'LOCATION_NAME', 'PARK_TYPE_ID', 'PARK_TYPE_DESC', 'CAPACITY_OF_PARK', 'WORKING_TIME', 'COUNTY_NAME', 'LONGITUDE', 'LATITUDE']
         writer = csv.DictWriter(file, fieldnames=headers)
         writer.writeheader()
 
@@ -30,6 +49,7 @@ def generate_map():
     midpoint = ((point1[0] + point2[0]) / 2, (point1[1] + point2[1]) / 2)
 
     # Checkboxes'tan gelen verileri al
+    include_ispark = 'ispark' in request.form
     include_gas_stations = 'gas_station' in request.form
     include_restaurants = 'restaurant' in request.form
     include_hastane = 'hastane' in request.form
@@ -47,6 +67,11 @@ def generate_map():
         save_to_csv4(unique_yer)
     else:
         clear_csv('static/yerler.csv')
+
+    if include_ispark:
+        csv_kopyala("static/ispark_parking.csv","static/ispark.csv")
+    else:
+        clear_csv_ispark('static/ispark.csv')
 
     if include_hastane:
         nearest_hastane = find_nearest_hastane(midpoint, keywords3)
@@ -103,10 +128,12 @@ def find_nearest_restaurants(midpoint, keywords, radius=5000):
             for result in data['results']:
                 location = result['geometry']['location']
                 name = result['name']
+                rating = result.get('rating', 'No rating')
                 place = {
                     'name': name,
                     'latitude': location['lat'],
-                    'longitude': location['lng']
+                    'longitude': location['lng'],
+                    'rating': rating
                 }
                 restaurants.append(place)
 
@@ -165,14 +192,16 @@ def find_nearest_hastane(midpoint, keywords, radius=5000):
 
     return hastaneler
 
-def find_nearest_yer(midpoint, keyword, radius=5000):
+def find_nearest_yer(midpoint, user_input, radius=5000):
     endpoint = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
-    yerler = []
+    restaurants = []
+
+
     params = {
-        'key': google_api_key,
+        'key': google_api_key,  # replace with your actual API key
         'location': f"{midpoint[0]},{midpoint[1]}",
         'radius': radius,
-        'keyword': keyword
+        'keyword': user_input
     }
 
     response = requests.get(endpoint, params=params)
@@ -182,19 +211,21 @@ def find_nearest_yer(midpoint, keyword, radius=5000):
         for result in data['results']:
             location = result['geometry']['location']
             name = result['name']
+            rating = result.get('rating', 'No rating')  # default to 'No rating' if rating is not available
             place = {
                 'name': name,
                 'latitude': location['lat'],
-                'longitude': location['lng']
+                'longitude': location['lng'],
+                'rating': rating
             }
-            yerler.append(place)
+            restaurants.append(place)
 
-    return yerler
+    return restaurants
 
 def save_to_csv4(yerler):
     csv_file = 'static/yerler.csv'
     with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
-        headers = ['name', 'latitude', 'longitude']
+        headers = ['name', 'latitude', 'longitude', 'rating']
         writer = csv.DictWriter(file, fieldnames=headers)
 
         writer.writeheader()
@@ -214,7 +245,7 @@ def save_to_csv3(hastaneler):
 def save_to_csv2(restaurants):
     csv_file = 'static/restoran.csv'
     with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
-        headers = ['name', 'latitude', 'longitude']
+        headers = ['name', 'latitude', 'longitude', 'rating']
         writer = csv.DictWriter(file, fieldnames=headers)
 
         writer.writeheader()
